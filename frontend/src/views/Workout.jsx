@@ -31,6 +31,7 @@ import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWo
 import { afterScrollRestore, scrollRestorePending } from '../components/Modals.jsx'
 import { effortColor } from '../lib/effort.js'
 import Elapsed from '../components/Elapsed.jsx'
+import { useDesktop } from '../lib/use-desktop.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
@@ -983,6 +984,9 @@ function ActiveWorkout() {
   const workKey = useUI(s => s.work?.endsAt)
   const timerKey = useUI(s => s.timer && `${s.timer.endsAt}:${s.timer.forIdx ?? ''}`)
   const readyRestEnds = useUI(s => (s.timer?.ready ? s.timer.endsAt : undefined))
+  const setTimerSlot = useUI(s => s.setTimerSlot)
+  // A wide window gives the session three columns: the exercises, the current one, the rest bar.
+  const desktop = useDesktop()
   const A = S.active
   const editing = !!A.editingWorkoutId
   // A past workout has no rest to time — the sets were done days ago. The work timer for
@@ -2026,7 +2030,8 @@ function ActiveWorkout() {
   // than it and scrolls sideways anyway, so it costs no height; the header bar has no width to
   // spare on a phone (a second line under the name). With the chips off it sits in the header.
   const sessionMap = wc.muscleMap ? <SessionMapButton entries={A.entries} body={S.body} /> : null
-  const chipRow = wc.exerciseChips && A.entries.length > 0
+  // On a wide window the left column lists the exercises, so the strip would only repeat it.
+  const chipRow = !desktop && wc.exerciseChips && A.entries.length > 0
     ? <div className="wchips-row"><WorkoutChips entries={A.entries} cur={listMode ? visibleExercise : cur} onPick={pickChip} />{sessionMap}</div>
     : null
 
@@ -2145,7 +2150,7 @@ function ActiveWorkout() {
     }
   }, [])
 
-  return <WorkoutScrollAnchor enabled={collapseOn} collapsed={[...collapsed].join(',')}>
+  const header = <>
     {/* In list mode the whole session scrolls under the header, so the header (name, clock,
         set counter, discard/finish, progress) stays pinned — the one thing you want in view
         while you are somewhere in the middle of a long stack. Cards mode never scrolls far. */}
@@ -2177,6 +2182,8 @@ function ActiveWorkout() {
         anywhere in a long stack. */}
     {listMode && chipRow}
     </div>
+  </>
+  const mainCol = <>
     {editing && <p className="muted small">{t('Editing a saved workout. Date and duration stay unchanged.')}</p>}
     {A.backfill && <div className="muted small" style={{ marginBottom: 8 }}>{t('Logging a past workout, so no rest timers.')}</div>}
 
@@ -2332,6 +2339,24 @@ function ActiveWorkout() {
       </button>
     })()}
     <div className="workout-end-spacer" />
+  </>
+  const nextUnit = units[unitIdx + 1]
+  const leftCol = <aside className="wo-left">
+    {A.entries.length > 0 && <WorkoutChips list entries={A.entries} cur={cur} onPick={pickChip} />}
+  </aside>
+  const rightCol = <aside className="wo-right">
+    <div className="wo-timer" ref={setTimerSlot} />
+    <div className="card wo-sum">
+      <div><span>{t('Sets')}</span><b>{done}/{total}</b></div>
+      {weighable && <div><span>{t('Volume')}</span><b>{fmtVol(vol, S.unit)}</b></div>}
+      {nextUnit && <div><span>{t('Up next')}</span><b>{nextUnit.map(idx => exerciseNameFor(exOr(A.entries[idx].id))).join(' + ')}</b></div>}
+    </div>
+  </aside>
+
+  return <WorkoutScrollAnchor enabled={collapseOn} collapsed={[...collapsed].join(',')} wide={desktop}>
+    {desktop
+      ? <div className="wo-desk">{leftCol}<div className="wo-main">{header}{mainCol}</div>{rightCol}</div>
+      : <>{header}{mainCol}</>}
   </WorkoutScrollAnchor>
 }
 

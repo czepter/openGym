@@ -10,6 +10,7 @@ import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import AdminCoach from './AdminCoach.jsx'
+import { useDesktop } from '../lib/use-desktop.js'
 import '../admin.css'
 
 // Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
@@ -27,6 +28,15 @@ const rel = ts => {
   if (s < 3600) return Math.floor(s / 60) + ' min ago'
   if (s < 86400) return Math.floor(s / 3600) + ' h ago'
   return Math.floor(s / 86400) + ' d ago'
+}
+const initials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+const WEEK = 7 * 86400000
+// One word per account for the desktop table: what the mobile list says in its second line.
+function StatusPill({ u }) {
+  if (u.disabled) return <span className="adm-pill bad">disabled</span>
+  if (u.live) return <span className="adm-pill acc">training now</span>
+  if (u.lastSync && Date.now() - u.lastSync < WEEK) return <span className="adm-pill ok">active</span>
+  return <span className="adm-pill">idle</span>
 }
 const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min' }
 
@@ -220,7 +230,7 @@ function InvitesCard({ invites, reload, inviteOnly }) {
   const copy = code => { navigator.clipboard?.writeText(code).catch(() => {}); toast('Copied ' + code) }
   const open = (invites || []).filter(i => !i.usedBy)
   const used = (invites || []).filter(i => i.usedBy)
-  return <div className="card">
+  return <div className="card" id="adm-invites">
     <div className="row between"><h2 style={{ margin: 0 }}>Invite codes</h2>
       <Button variant="primary" size="sm" onClick={gen} icon="plus">New code</Button></div>
     <div className="adm-lead">
@@ -311,11 +321,14 @@ function AuditCard({ tick, owner }) {
 export default function Admin() {
   const nav = useNavigate()
   // Opened from Settings → AI Coach (the hosted app's way to the Coach, which is the server's):
-  // straight to the Coach card rather than the top of the page.
+  // straight to the Coach card rather than the top of the page, or on a wide window to the
+  // Coach's own section.
   const toCoach = useLocation().state?.section === 'coach'
   const coachRef = useRef(null)
+  const desktop = useDesktop()
   useEffect(() => {
     if (!toCoach) return
+    if (desktop) { nav('/admin/coach', { replace: true }); return }
     const tm = setTimeout(() => coachRef.current?.scrollIntoView({ block: 'start' }), 50)
     return () => clearTimeout(tm)
   }, [toCoach])
@@ -326,6 +339,7 @@ export default function Admin() {
   const [invites, setInvites] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
   const [tick, setTick] = useState(0)          // the ↻ button; the activity log listens to it
+  const desktop = useDesktop()
 
   // A failed load, or an answer without a list, used to leave the page on "Loading…" for good —
   // with a toast every 15 seconds from the poll, or with nothing at all when the answer was
@@ -349,8 +363,10 @@ export default function Admin() {
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const disabledCount = (users || []).filter(u => u.disabled).length
 
-  return <div className="narrow">
-    <div className="hdr">
+  // A wide window (lib/use-desktop.js) spreads the same cards over two columns, users as a table
+  // first (admin.css .adm-desk); the sidebar jumps to each by its id (TabBar.jsx).
+  return <div className={desktop ? 'adm-desk' : 'narrow'}>
+    <div className="hdr" id="adm-overview">
       <button className="iconbtn" data-back="/settings/account" onClick={() => nav('/settings/account')} aria-label="Back"><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginInlineStart: 12 }}><h1 style={{ margin: 0 }}>Admin</h1>
         <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : usersErr ? 'Could not load' : 'Loading…'}</div></div>
@@ -387,14 +403,27 @@ export default function Admin() {
 
     {/* The Coach setup. Renders nothing at all unless the instance offers the Coach, so an admin
         page on a box that never enabled it is byte-for-byte the page it was before. */}
-    <div ref={coachRef} className="adm-coach-anchor"><AdminCoach /></div>
+    <div ref={coachRef} id="adm-coach" className="adm-coach-anchor adm-coach"><AdminCoach /></div>
 
     <InvitesCard invites={invites} reload={loadInvites} inviteOnly={inviteOnly} />
 
-    <div className="card">
+    <div className="card" id="adm-users">
       <h2 style={{ margin: 0 }}>Users</h2>
       <div className="adm-lead">Everyone with a profile on this instance. Tap one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.</div>
-      <div className="list">
+      {desktop ? <div className="adm-table">
+        <div className="adm-tr adm-th" aria-hidden="true"><span>User</span><span>Role</span><span>Status</span><span className="num">Workouts</span><span>Last workout</span><span>Last sync</span><span /></div>
+        {(users || []).map(u => <button key={u.id} className="adm-tr" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
+          <span className="adm-who"><span className={'adm-av' + (u.live ? ' live' : '')} aria-hidden="true">{initials(u.name)}</span>
+            <span className="adm-who-t"><b>{u.name}</b><span>{u.live ? 'training now · ' + u.live.name : u.email || (u.hasPush ? 'push notifications on' : '')}</span></span></span>
+          <span>{u.admin ? <span className="adm-pill acc">{u.owner ? 'owner' : 'admin'}</span> : <span className="dim">member</span>}</span>
+          <span><StatusPill u={u} /></span>
+          <span className="num">{u.workouts}</span>
+          <span className="dim">{u.lastWorkout ? fmtDate(u.lastWorkout) : '–'}</span>
+          <span className="dim">{rel(u.lastSync)}</span>
+          <Icon name="chevronRight" className="chev" />
+        </button>)}
+        {users && !users.length && <div className="adm-empty">No users yet.</div>}
+      </div> : <div className="list">
         {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
           <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{u.owner ? 'owner' : 'admin'}</span>}{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>disabled</span>}</div>
             <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · last sync ' + rel(u.lastSync)}</div>
@@ -402,9 +431,9 @@ export default function Admin() {
           {u.hasPush && <Icon name="bell" title="push notifications on" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
         </div>)}
         {users && !users.length && <div className="adm-empty">No users yet.</div>}
-      </div>
+      </div>}
     </div>
 
-    <div style={{ marginTop: 14 }}><AuditCard tick={tick} owner={viewerOwner} /></div>
+    <div style={{ marginTop: 14 }} id="adm-activity" className="adm-activity"><AuditCard tick={tick} owner={viewerOwner} /></div>
   </div>
 }
