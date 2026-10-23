@@ -27,6 +27,13 @@ These exports work without any editing:
 | Strong | Settings → Export Data |
 | Hevy | Profile → Settings → Export & Import Data |
 | Gravl | Profile → Export Data |
+| Jefit | On jefit.com (not the app): My Jefit → Settings → Data Controls → **Export Data** |
+
+Jefit's file holds several tables; openGym reads the workout sessions and exercise logs and
+ignores the rest (routines, body stats). Pick the downloaded file as it is: opening and saving
+it in a spreadsheet app breaks that layout. Jefit doesn't write a unit into the file, so its
+weights are read in the unit your openGym profile uses; switch the profile unit first if the two
+differ. Only weight-and-reps sets come over; cardio and timed sets are skipped and counted in the summary.
 
 Other files work too, as long as they have a date, an exercise name and something measured
 (weight and reps, a time or a distance). See [your own CSV](#your-own-csv) below.

@@ -10,6 +10,7 @@
 //   FitNotes 2 (iOS)   Date,Exercise,Category,Weight (kg),Weight (lbs),Reps,Distance,Distance Unit,Time,Notes,Kind
 //   Strong             Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE
 //   Hevy               title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe
+// Jefit's multi-table file is unpacked into rows of that kind first (jefitRows).
 // Anything else falls through to loose header matching, which covers Lyfta and the
 // spreadsheet round-trips people actually have on disk, as long as the file has a
 // date, an exercise name and something measured.
@@ -62,6 +63,45 @@ function delimiterOf(s) {
   const head = (nl < 0 ? s : s.slice(0, nl)).replace(/"[^"]*"/g, '')
   const count = ch => head.split(ch).length - 1
   return count(';') > count(',') ? ';' : ','
+}
+
+// Jefit exports several CSV tables in one file, each under a "### NAME ###" line. The sets are
+// in EXERCISE LOGS, one row per exercise and day with every set packed into one cell as
+// "weight x reps" ("60x8,62.5x6"); WORKOUT SESSIONS says when each session started (Unix
+// seconds) and how long it took. Unpacked to one row per set, the file reads like any other.
+// Jefit writes no unit: the weights are taken in the profile's, like any file that says nothing.
+const isJefit = s => /^#{3} *EXERCISE LOGS *#{3}/m.test(s)
+function jefitRows(text) {
+  const sections = {}
+  let cur = null
+  for (const line of String(text).replace(/^﻿/, '').split(/\r?\n/)) {
+    const m = line.match(/^#{3} *(.+?) *#{3}\s*$/)
+    if (m) cur = sections[m[1].toUpperCase()] = []
+    else if (cur) cur.push(line)
+  }
+  const table = name => {
+    const [head = [], ...rows] = parseCSV((sections[name] || []).join('\n'))
+    const h = head.map(x => x.trim().toLowerCase())
+    return rows.map(r => Object.fromEntries(h.map((k, i) => [k, String(r[i] ?? '').trim()])))
+  }
+  const local = sec => {
+    const t = new Date(sec * 1000)
+    return `${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}:${p2(t.getMinutes())}`
+  }
+  const sessions = new Map(table('WORKOUT SESSIONS').map(s => [s._id, s]))
+  const out = [['Date', 'End Time', 'Exercise', 'Weight', 'Reps']]
+  for (const log of table('EXERCISE LOGS')) {
+    const s = sessions.get(log.belongsession)
+    const from = s && +s.starttime > 0 ? +s.starttime : 0
+    const till = from && (+s.total_time > 0 ? from + +s.total_time : +s.endtime > from ? +s.endtime : 0)
+    const date = from ? local(from) : log.mydate
+    // an unreadable set stays a row, so the parse counts it as skipped rather than losing it
+    for (const set of (log.logs || '').split(',')) {
+      const [w = '', reps = ''] = set.split('x')
+      out.push([date, till ? local(till) : '', log.ename, w.trim(), reps.trim()])
+    }
+  }
+  return out
 }
 
 // '#' reads as "no": Strong's "Workout #" is the session number, and stripped to "workout" it
@@ -475,10 +515,11 @@ export function priorCustom(customEx, id, name) {
 
 // `customEx`: the custom exercises already in state (priorCustom above).
 export function parseWorkoutCSV(text, { unit = 'kg', customEx = [] } = {}) {
-  const rows = parseCSV(text)
+  const jefit = isJefit(text)
+  const rows = jefit ? jefitRows(text) : parseCSV(text)
   if (rows.length < 2) return { error: 'empty' }
   const map = mapHeader(rows[0])
-  const source = detectSource(rows[0])
+  const source = jefit ? 'Jefit' : detectSource(rows[0])
   const dateCol = map.date !== undefined ? 'date' : map.startTime !== undefined ? 'startTime' : null
   if (!dateCol || map.exercise === undefined) return { error: 'unrecognised' }
   // Strong's Duration is how long the whole workout took ("1h 5m", "52m"), written on every
@@ -595,10 +636,10 @@ export function parseWorkoutCSV(text, { unit = 'kg', customEx = [] } = {}) {
       else if (rpe != null) { set.rpe = rpe; rpeSets++ }
     }
 
-    // Strong and Hevy write the workout's start on every row, so two sessions on one day are
+    // Strong, Hevy and Jefit write the workout's start on every row, so two sessions on one day are
     // told apart by it (and by the name) and stay two workouts (#505). FitNotes has no times, and
     // a generic file may stamp each set with its own, so everything else stays one per day.
-    const sessionKey = (source === 'Strong' || source === 'Hevy') && when.t != null
+    const sessionKey = (source === 'Strong' || source === 'Hevy' || source === 'Jefit') && when.t != null
       ? when.d + '|' + when.t + '|' + (cell(r, 'workoutName') || '')
       : when.d
     let day = byDate.get(sessionKey)
