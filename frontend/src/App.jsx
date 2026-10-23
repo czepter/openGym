@@ -25,6 +25,7 @@ import { installViewportGuard } from './lib/viewport-guard.js'
 import { installChipDrag } from './lib/hchips.js'
 import { syncPushSubscription } from './lib/push.js'
 import { MOBILE, nativePlatform } from './lib/mobile.js'
+import { useDesktop } from './lib/use-desktop.js'
 import { exitWorkoutEdit, startFlow, beginWorkout } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
@@ -231,8 +232,17 @@ function Shell() {
   // The chat owns the bottom of the screen as well: its composer sits where the tabs would be.
   // The first-launch card has no tabs either: they changed the route behind it.
   const noTabs = inWorkout || loc.pathname === '/coach' || needsMobileOnboarding || permSteps
+  // A wide window keeps the navigation on screen as a sidebar, on the workout and the chat too:
+  // there it takes nothing from the bottom of the screen. The first-launch steps still have none.
+  const desktop = useDesktop()
+  const showTabs = desktop ? !(needsMobileOnboarding || permSteps) : !noTabs
 
   const authed = user || isGuest
+  const side = showTabs && desktop && !!authed
+  useEffect(() => {
+    document.body.classList.toggle('has-side', side)
+    return () => document.body.classList.remove('has-side')
+  }, [side])
   // The boot screen in index.html covers the start; it goes once there is something to show.
   useEffect(() => { if (ready || authed) hideBoot() }, [ready, authed])
   if (!ready && !authed) return (
@@ -291,7 +301,7 @@ function Shell() {
           would ride along with the page for the length of it. Decides for itself when to show —
           including on the sign-in screen, when the server has just ended the session. */}
       <SyncBanner />
-      {!noTabs && <TabBar onStart={startFlow} />}
+      {showTabs && <TabBar onStart={startFlow} desktop={desktop} />}
       <RestTimer />
       <Modals />
       <Toast />

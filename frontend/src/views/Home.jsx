@@ -6,6 +6,7 @@ import { fmtNum, fmtDate, todayISO, isoOf, weekStartOf, weekDayOffset, DAYS, DAY
 import { t, tn, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, starterPlanSheet, bwDeltaColor, weighInsSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
+import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
 import QueueRow from '../components/QueueRow.jsx'
 import { queueOf, queueView, weekTally, pinState } from '../lib/queue.js'
@@ -16,6 +17,7 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { dayNoteOf } from '../lib/day-notes.js'
 import { weighInAt } from '../lib/bodyweight.js'
+import { useDesktop } from '../lib/use-desktop.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -25,6 +27,7 @@ export default function Home() {
   // The banner switched off and the sync stuck: a dot on the gear (Settings → Show connection status).
   const trouble = useConnectionTrouble()
   const [weekOffset, setWeekOffset] = useState(0)
+  const desktop = useDesktop()
 
   const today = new Date()
   // A weekday can hold several routines. `todayRoutines` is the whole day; `routine` is the
@@ -101,12 +104,13 @@ export default function Home() {
   // already in progress wins, as on the today row — starting another would overwrite it.
   const onQueueStart = id => { if (S.active) nav('/workout'); else startFlow([id]) }
 
-  return <div className="narrow">
+  const header = <>
     <div className="hdr">
       <div><h1>{user ? t('Hi {0}', user.name) : 'openGym'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={trouble ? t('Settings') + ', ' + t('Connection problem') : t('Settings')}><Icon name="gear" />{trouble && <span className="tab-dot" aria-hidden="true" />}</button>
     </div>
-
+  </>
+  const weekCard = <>
     <div className="card">
       {/* A coach week runs by order, not by weekday, so its progress row stands in for the
           seven dots (components/QueueRow.jsx). The today row below stays as it is: the queue's
@@ -158,7 +162,8 @@ export default function Home() {
         </Button>
       </div>}
     </div>
-
+  </>
+  const checkInCard = <>
     {/* Jump to the gym check-in cards (QR membership codes). Shown here as a quick tap on
         arrival at the gym; folds away per user via the "Gym check-in" switch in Settings. */}
     {S.checkIn !== false && (
@@ -175,7 +180,8 @@ export default function Home() {
         </div>
       </div>
     )}
-
+  </>
+  const welcomeCard = <>
     {!S.routines.length && !S.active && (
       <div className="card">
         <div className="row" style={{ gap: 10, marginBottom: 6 }}>
@@ -187,7 +193,8 @@ export default function Home() {
         <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
       </div>
     )}
-
+  </>
+  const weightCard = <>
     {S.showWeightCard !== false && <div className="card">
       <div className="row between bw-head" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
@@ -223,7 +230,8 @@ export default function Home() {
         ? t('No weigh-ins yet. Log your weight to start the curve.')
         : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</div>}
     </div>}
-
+  </>
+  const streakCard = <>
     <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => calendarSheet())}>
       <div className="row between">
         <div>
@@ -236,5 +244,33 @@ export default function Home() {
         <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
       </div>
     </div>
+  </>
+
+  // A wide window (lib/use-desktop.js) lays the same cards out as a dashboard: what to do and the
+  // body weight on the left, the streak and check-in beside them, and the year of training — the
+  // one chart Stats leads with — across the bottom. A phone keeps the single column, in its order.
+  if (desktop) return <div className="home-desk">
+    {header}
+    {welcomeCard}
+    <div className="home-cols">
+      <div className="home-col">{weekCard}{weightCard}</div>
+      <div className="home-col">{streakCard}{checkInCard}</div>
+    </div>
+    {S.workouts.length > 0 && <div className="card">
+      <h2>{t('Activity (last 12 months)')}</h2>
+      <Heatmap S={S}
+        metric={S.heatmapMetric === 'vol' ? 'vol' : 'time'}
+        onMetricChange={metric => useStore.getState().update(s => { s.heatmapMetric = metric })}
+        onDay={iso => calendarSheet(iso)} />
+    </div>}
+  </div>
+
+  return <div className="narrow">
+    {header}
+    {weekCard}
+    {checkInCard}
+    {welcomeCard}
+    {weightCard}
+    {streakCard}
   </div>
 }

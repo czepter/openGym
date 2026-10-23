@@ -226,6 +226,10 @@ export const useUI = create((set, get) => ({
                        // paused: held at `left`; `endsAt` means nothing until resumeRest sets it again
   work: null,          // work countdown DURING a timed set (issue #16) — { left, total, endsAt, label, overtime? }
   timerFlashId: 0,     // changing the id retriggers the theme-blink visual alert
+  // Where the rest bar draws itself instead of over the page: the workout's right-hand column on
+  // a wide window (Workout.jsx), null everywhere else. Set through a ref, so it follows the mount.
+  timerSlot: null,
+  setTimerSlot: el => set(s => (s.timerSlot === el ? s : { timerSlot: el })),
 
   flashTimer() {
     if (!useStore.getState().S.timerFlash) return
