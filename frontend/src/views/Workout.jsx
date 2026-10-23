@@ -8,8 +8,8 @@ import { useUI } from '../store/useUI.js'
 import { exOr, betterWeight } from '../lib/exercises.js'
 import { usesBar } from '../lib/bar.js'
 import { loadKindFor, baseWeightFor, inventoryFor, rowLoad, sameLoad, plateDelta, dropGrid } from '../lib/plates.js'
-import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, freestyleConfig, defaultConfig, setsDoneActive, setUnitsTotal, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, repStep, EFFORT, effortOf, stepEffort, capEffort, cascadeWeight, insertWarmupRow, barFloor, makeWarmupAt, canBeWarmup, makeWorkAt, removeRowAt, removeLastSet, setSpanAt, copyRowAt, copySpanAt, insertRowAt, pairAdjacent, unpairSuperset, cleanupSg, applyIntensifierPlan, pinnedNoteFor, exNoteFor, setsRepsOf } from '../lib/history.js'
-import { fmtNum, fmtPlate, exerciseNameText, fmtDate, fmtDaysAgo, todayISO, exCount, DAYN } from '../lib/format.js'
+import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, freestyleConfig, defaultConfig, setsDoneActive, setUnitsTotal, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, repStep, EFFORT, effortOf, stepEffort, capEffort, cascadeWeight, insertWarmupRow, barFloor, makeWarmupAt, canBeWarmup, makeWorkAt, removeRowAt, removeLastSet, setSpanAt, copyRowAt, copySpanAt, insertRowAt, pairAdjacent, unpairSuperset, cleanupSg, applyIntensifierPlan, pinnedNoteFor, exNoteFor, setsRepsOf, workoutVolume } from '../lib/history.js'
+import { fmtNum, fmtPlate, exerciseNameText, fmtDate, fmtDaysAgo, todayISO, exCount, DAYN, fmtVol } from '../lib/format.js'
 import { speedUnitOf, toSpeed, fromSpeed } from '../lib/speed.js'
 import { clampIncline, hasIncline, inclineFits, inclineFrom, INCLINE_STEP } from '../lib/incline.js'
 import { beep, vibrate, unlock } from '../lib/sound.js'
@@ -30,6 +30,7 @@ import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, finishWo
 import { afterScrollRestore, scrollRestorePending } from '../components/Modals.jsx'
 import { effortColor } from '../lib/effort.js'
 import Elapsed from '../components/Elapsed.jsx'
+import { useDesktop } from '../lib/use-desktop.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
@@ -922,7 +923,9 @@ function ActiveWorkout() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
-  const { startRest: liveRest, stopRest, stopWork, work, timer } = useUI()
+  const { startRest: liveRest, stopRest, stopWork, work, timer, setTimerSlot } = useUI()
+  // A wide window gives the session three columns: the exercises, the current one, the rest bar.
+  const desktop = useDesktop()
   const A = S.active
   const editing = !!A.editingWorkoutId
   // A past workout has no rest to time — the sets were done days ago. The work timer for
@@ -1882,7 +1885,8 @@ function ActiveWorkout() {
     if (chip.unit.includes(cur)) return
     update(s => { if (s.active) s.active.cur = chip.unit[0] })
   }
-  const chipRow = wc.exerciseChips && A.entries.length > 0
+  // On a wide window the left column lists the exercises, so the strip would only repeat it.
+  const chipRow = !desktop && wc.exerciseChips && A.entries.length > 0
     ? <WorkoutChips entries={A.entries} cur={cur} onPick={pickChip} />
     : null
 
@@ -2001,184 +2005,204 @@ function ActiveWorkout() {
     }
   }, [])
 
-  return <WorkoutScrollAnchor enabled={collapseOn} collapsed={[...collapsed].join(',')}>
-    {/* In list mode the whole session scrolls under the header, so the header (name, clock,
-        set counter, discard/finish, progress) stays pinned — the one thing you want in view
-        while you are somewhere in the middle of a long stack. Cards mode never scrolls far. */}
-    <div className={'whdr' + (listMode ? ' stick' : '')} ref={hdrRef}>
-    {/* ⌄ leaves the screen and keeps the session running (the tab bar's Resume brings it back);
-        in the editor of a saved workout it is the ✕ that closes the editor. Discard is in the ⋯
-        menu now, and Finish is a labelled pill rather than a check that looked like a set tick: it
-        opens the Finish sheet (Finish and save, Discard), the editor's Save saves at once. */}
-    <div className="hdr whdr-bar">
-      {editing
-        ? <button className="iconbtn" aria-label={t('Close editor')} title={t('Close editor')} onClick={() => exitWorkoutEdit()}><Icon name="xmark" /></button>
-        : <button className="iconbtn" aria-label={t('Minimize')} title={t('Minimize')} onClick={() => nav('/home')}><Icon name="chevronDown" /></button>}
-      <div className="whdr-mid"><div className="whdr-name">{A.name}</div><div className="sub">{(A.backfill || editing) ? fmtDate(A.d, true) : <Elapsed start={A.start} />} · {t('{0} sets', done + '/' + total)}</div></div>
-      <button className="iconbtn" aria-label={t('Workout options')} title={t('Workout options')} onClick={openViewMenu}><Icon name="more" /></button>
-      <button className="btn primary pill whdr-finish" aria-label={editing ? t('Save changes') : undefined}
-        onClick={() => (editing ? finishWorkout() : finishWorkoutSheet({ onDiscard: discardWorkout }))}>{editing ? t('Save') : t('Finish')}</button>
-    </div>
-    <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
-    {/* In the list the chips ride in the pinned header, so any exercise is one tap away from
-        anywhere in a long stack. */}
-    {listMode && chipRow}
-    </div>
-    {editing && <p className="muted small">{t('Editing a saved workout. Date and duration stay unchanged.')}</p>}
-    {A.backfill && <div className="muted small" style={{ marginBottom: 8 }}>{t('Logging a past workout, so no rest timers.')}</div>}
-
-    {A.entries.length ? (listMode ? (
-      <div className="workout-list" data-testid="workout-list" ref={listRef}>
-        {units.map((u, ui) => {
-          const multi = u.length > 1
-          const isCur = u.includes(cur)
-          const isCollapsed = collapsed.has(u.join('-'))
-          // Finished and tapped open again: it says it can fold back, and does on a tap.
-          const reopened = collapseOn && !isCur && !isCollapsed && opened.has(u.join('-')) && finished(u)
-          return <section key={u.join('-')} className={'wl-unit' + (isCur ? ' cur' : '')} data-exidx={u[0]} data-unit-key={u.join('-')}>
-            <div className="wl-hd">
-              <span className="muted small">{multi ? t('Superset {0} / {1}', ui + 1, units.length) : t('Exercise {0} / {1}', ui + 1, units.length)}</span>
-              <span className="row" style={{ gap: 6 }}>
-                {reopened && <button className="chip" aria-expanded="true" aria-controls={'workout-unit-' + u.join('-')}
-                  onClick={() => setUnitOpen(u.join('-'), false)}>{t('Fold away')}</button>}
-                {isCur
-                  ? <span className="tag acc">{t('Current')}</span>
-                  : <button className="chip" onClick={() => focusUnit(u[0])}>{t('Set current')}</button>}
-              </span>
-            </div>
-            <div id={'workout-unit-' + u.join('-')}>
-            {/* One line per exercise, and the line is the way back in: a tap opens the sets again
-                to fix a number, without making it the current exercise. */}
-            {isCollapsed ? <button type="button" className="wl-summary" aria-expanded="false" title={t('Show the sets')}
-              onClick={() => setUnitOpen(u.join('-'), true)}>
-              {u.map(idx => <span key={idx} className="row between" style={{ gap: 8 }}>
-                <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{exerciseNameFor(exOr(A.entries[idx].id))}</span>
-                <span className="tag acc nocap"><Icon name="check" />{t('{0} sets', A.entries[idx].sets.length)}</span>
-              </span>)}
-            </button> : multi ? (
-              <div className="ss-card">
-                <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
-                  <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(u)}</span>
-                  <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(u[0])}>{t('Unpair')}</Button>
-                </div>
-                {u.map((idx, k) => {
-                  const entry = A.entries[idx]
-                  return <div key={idx} ref={el => bindExRef(entry, el)} className="ss-ex" data-exidx={idx}>
-                    {k > 0 && <div className="ss-amp">+</div>}
-                    <ExerciseBlock entryIdx={idx} compact dense={dense} onSetRowRef={(setIdx, el) => bindSetRef(entry, setIdx, el)}
-                      {...blockProps(idx)} />
-                  </div>
-                })}
-              </div>
-            ) : (
-              <ExerciseBlock entryIdx={u[0]} dense={dense}
-                onPairPrev={u[0] > 0 ? () => pairAt(u[0] - 1, u[0]) : null}
-                onPairNext={u[0] < A.entries.length - 1 ? () => pairAt(u[0], u[0] + 1) : null}
-                {...blockProps(u[0])} />
-            )}
-            </div>
-          </section>
-        })}
+  const header = <>
+      {/* In list mode the whole session scrolls under the header, so the header (name, clock,
+          set counter, discard/finish, progress) stays pinned — the one thing you want in view
+          while you are somewhere in the middle of a long stack. Cards mode never scrolls far. */}
+      <div className={'whdr' + (listMode ? ' stick' : '')} ref={hdrRef}>
+      {/* ⌄ leaves the screen and keeps the session running (the tab bar's Resume brings it back);
+          in the editor of a saved workout it is the ✕ that closes the editor. Discard is in the ⋯
+          menu now, and Finish is a labelled pill rather than a check that looked like a set tick: it
+          opens the Finish sheet (Finish and save, Discard), the editor's Save saves at once. */}
+      <div className="hdr whdr-bar">
+        {editing
+          ? <button className="iconbtn" aria-label={t('Close editor')} title={t('Close editor')} onClick={() => exitWorkoutEdit()}><Icon name="xmark" /></button>
+          : <button className="iconbtn" aria-label={t('Minimize')} title={t('Minimize')} onClick={() => nav('/home')}><Icon name="chevronDown" /></button>}
+        <div className="whdr-mid"><div className="whdr-name">{A.name}</div><div className="sub">{(A.backfill || editing) ? fmtDate(A.d, true) : <Elapsed start={A.start} />} · {t('{0} sets', done + '/' + total)}</div></div>
+        <button className="iconbtn" aria-label={t('Workout options')} title={t('Workout options')} onClick={openViewMenu}><Icon name="more" /></button>
+        <button className="btn primary pill whdr-finish" aria-label={editing ? t('Save changes') : undefined}
+          onClick={() => (editing ? finishWorkout() : finishWorkoutSheet({ onDiscard: discardWorkout }))}>{editing ? t('Save') : t('Finish')}</button>
       </div>
-    ) : <>
-      {/* The chips stand in for "Exercise 2 / 5": the number is on the current chip, and the
-          others say what is done and what is waiting (#323). */}
-      {chipRow || <div className="muted small" style={{ marginBottom: 6 }}>{isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}</div>}
-      <SwipeCards index={unitIdx} count={units.length} revision={A}
-        timerKey={timer && `${timer.endsAt}:${timer.forIdx ?? ''}`} workKey={work?.endsAt}
-        onNavigate={navigateUnit} renderPreview={direction => {
-          // The card slid in shows what the card itself will: in the editor, no hold to start
-          // and no plates to load; in a session, the progression line, or the card grows by it
-          // the moment it lands. It gets the card's own wiring for that — the preview is inert,
-          // so none of it can be pressed. That includes a superset's header with its Unpair, and a
-          // lone exercise's "Make superset" buttons when Settings shows them: without them the
-          // header's words moved over, or the card grew by a row, as it landed.
-          const adjacent = units[stepUnitIndex(A.entries, units, unitIdx, direction, skipDone)] || []
-          if (!adjacent.length) return null
-          return adjacent.length > 1 ? (
-            <div className="ss-card">
-              <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
-                <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(adjacent)}</span>
-                <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(adjacent[0])}>{t('Unpair')}</Button>
+      <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
+      {/* In the list the chips ride in the pinned header, so any exercise is one tap away from
+          anywhere in a long stack. */}
+      {listMode && chipRow}
+      </div>
+  </>
+  const mainCol = <>
+      {editing && <p className="muted small">{t('Editing a saved workout. Date and duration stay unchanged.')}</p>}
+      {A.backfill && <div className="muted small" style={{ marginBottom: 8 }}>{t('Logging a past workout, so no rest timers.')}</div>}
+
+      {A.entries.length ? (listMode ? (
+        <div className="workout-list" data-testid="workout-list" ref={listRef}>
+          {units.map((u, ui) => {
+            const multi = u.length > 1
+            const isCur = u.includes(cur)
+            const isCollapsed = collapsed.has(u.join('-'))
+            // Finished and tapped open again: it says it can fold back, and does on a tap.
+            const reopened = collapseOn && !isCur && !isCollapsed && opened.has(u.join('-')) && finished(u)
+            return <section key={u.join('-')} className={'wl-unit' + (isCur ? ' cur' : '')} data-exidx={u[0]} data-unit-key={u.join('-')}>
+              <div className="wl-hd">
+                <span className="muted small">{multi ? t('Superset {0} / {1}', ui + 1, units.length) : t('Exercise {0} / {1}', ui + 1, units.length)}</span>
+                <span className="row" style={{ gap: 6 }}>
+                  {reopened && <button className="chip" aria-expanded="true" aria-controls={'workout-unit-' + u.join('-')}
+                    onClick={() => setUnitOpen(u.join('-'), false)}>{t('Fold away')}</button>}
+                  {isCur
+                    ? <span className="tag acc">{t('Current')}</span>
+                    : <button className="chip" onClick={() => focusUnit(u[0])}>{t('Set current')}</button>}
+                </span>
               </div>
-              {adjacent.map((idx, k) => <div key={idx} className="ss-ex" data-exidx={idx}>
-                {k > 0 && <div className="ss-amp">+</div>}
-                <ExerciseBlock entryIdx={idx} compact {...blockProps(idx)} />
-              </div>)}
-            </div>
-          ) : <ExerciseBlock entryIdx={adjacent[0]}
-            onPairPrev={adjacent[0] > 0 ? () => pairAt(adjacent[0] - 1, adjacent[0]) : null}
-            onPairNext={adjacent[0] < A.entries.length - 1 ? () => pairAt(adjacent[0], adjacent[0] + 1) : null}
-            {...blockProps(adjacent[0])} />
-        }}>
-      {focusMode ? (
-        <FocusView entryIdx={cur} unit={unit}
-          onSelectEntry={selectFocusEntry} onAdvanceUnit={advanceFocusUnit} pointerEpoch={focusPointerEpoch.current}
-          onPairPrev={onPairPrev} onPairNext={onPairNext} onUnpair={() => unpairAt(cur)}
-          {...blockProps(cur)} />
-      ) : isSuperset ? (
-        <div className="ss-card">
-          <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
-            <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(unit)}</span>
-            <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(cur)}>{t('Unpair')}</Button>
-          </div>
-          {unit.map((idx, k) => {
-            const entry = A.entries[idx]
-            return <div key={idx} ref={el => bindExRef(entry, el)} className="ss-ex" data-exidx={idx}>
-              {k > 0 && <div className="ss-amp">+</div>}
-              <ExerciseBlock entryIdx={idx} compact onSetRowRef={(setIdx, el) => bindSetRef(entry, setIdx, el)}
-                {...blockProps(idx)} />
-            </div>
+              <div id={'workout-unit-' + u.join('-')}>
+              {/* One line per exercise, and the line is the way back in: a tap opens the sets again
+                  to fix a number, without making it the current exercise. */}
+              {isCollapsed ? <button type="button" className="wl-summary" aria-expanded="false" title={t('Show the sets')}
+                onClick={() => setUnitOpen(u.join('-'), true)}>
+                {u.map(idx => <span key={idx} className="row between" style={{ gap: 8 }}>
+                  <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{exerciseNameFor(exOr(A.entries[idx].id))}</span>
+                  <span className="tag acc nocap"><Icon name="check" />{t('{0} sets', A.entries[idx].sets.length)}</span>
+                </span>)}
+              </button> : multi ? (
+                <div className="ss-card">
+                  <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
+                    <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(u)}</span>
+                    <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(u[0])}>{t('Unpair')}</Button>
+                  </div>
+                  {u.map((idx, k) => {
+                    const entry = A.entries[idx]
+                    return <div key={idx} ref={el => bindExRef(entry, el)} className="ss-ex" data-exidx={idx}>
+                      {k > 0 && <div className="ss-amp">+</div>}
+                      <ExerciseBlock entryIdx={idx} compact dense={dense} onSetRowRef={(setIdx, el) => bindSetRef(entry, setIdx, el)}
+                        {...blockProps(idx)} />
+                    </div>
+                  })}
+                </div>
+              ) : (
+                <ExerciseBlock entryIdx={u[0]} dense={dense}
+                  onPairPrev={u[0] > 0 ? () => pairAt(u[0] - 1, u[0]) : null}
+                  onPairNext={u[0] < A.entries.length - 1 ? () => pairAt(u[0], u[0] + 1) : null}
+                  {...blockProps(u[0])} />
+              )}
+              </div>
+            </section>
           })}
         </div>
-      ) : (
-        <ExerciseBlock entryIdx={cur} onPairPrev={onPairPrev} onPairNext={onPairNext} {...blockProps(cur)} />
-      )}
-      </SwipeCards>
-    </>) : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout. Add your first exercise and off you go.')}</div>}
+      ) : <>
+        {/* The chips stand in for "Exercise 2 / 5": the number is on the current chip, and the
+            others say what is done and what is waiting (#323). */}
+        {chipRow || <div className="muted small" style={{ marginBottom: 6 }}>{isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}</div>}
+        <SwipeCards index={unitIdx} count={units.length} revision={A}
+          timerKey={timer && `${timer.endsAt}:${timer.forIdx ?? ''}`} workKey={work?.endsAt}
+          onNavigate={navigateUnit} renderPreview={direction => {
+            // The card slid in shows what the card itself will: in the editor, no hold to start
+            // and no plates to load; in a session, the progression line, or the card grows by it
+            // the moment it lands. It gets the card's own wiring for that — the preview is inert,
+            // so none of it can be pressed. That includes a superset's header with its Unpair, and a
+            // lone exercise's "Make superset" buttons when Settings shows them: without them the
+            // header's words moved over, or the card grew by a row, as it landed.
+            const adjacent = units[stepUnitIndex(A.entries, units, unitIdx, direction, skipDone)] || []
+            if (!adjacent.length) return null
+            return adjacent.length > 1 ? (
+              <div className="ss-card">
+                <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
+                  <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(adjacent)}</span>
+                  <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(adjacent[0])}>{t('Unpair')}</Button>
+                </div>
+                {adjacent.map((idx, k) => <div key={idx} className="ss-ex" data-exidx={idx}>
+                  {k > 0 && <div className="ss-amp">+</div>}
+                  <ExerciseBlock entryIdx={idx} compact {...blockProps(idx)} />
+                </div>)}
+              </div>
+            ) : <ExerciseBlock entryIdx={adjacent[0]}
+              onPairPrev={adjacent[0] > 0 ? () => pairAt(adjacent[0] - 1, adjacent[0]) : null}
+              onPairNext={adjacent[0] < A.entries.length - 1 ? () => pairAt(adjacent[0], adjacent[0] + 1) : null}
+              {...blockProps(adjacent[0])} />
+          }}>
+        {focusMode ? (
+          <FocusView entryIdx={cur} unit={unit}
+            onSelectEntry={selectFocusEntry} onAdvanceUnit={advanceFocusUnit} pointerEpoch={focusPointerEpoch.current}
+            onPairPrev={onPairPrev} onPairNext={onPairNext} onUnpair={() => unpairAt(cur)}
+            {...blockProps(cur)} />
+        ) : isSuperset ? (
+          <div className="ss-card">
+            <div className="ss-hd" style={{ justifyContent: 'space-between' }}>
+              <span className="row" style={{ gap: 5 }}><Icon name="link" />{ssTitle(unit)}</span>
+              <Button size="xs" variant="ghost" icon="link" title={t('Unpair')} onClick={() => unpairAt(cur)}>{t('Unpair')}</Button>
+            </div>
+            {unit.map((idx, k) => {
+              const entry = A.entries[idx]
+              return <div key={idx} ref={el => bindExRef(entry, el)} className="ss-ex" data-exidx={idx}>
+                {k > 0 && <div className="ss-amp">+</div>}
+                <ExerciseBlock entryIdx={idx} compact onSetRowRef={(setIdx, el) => bindSetRef(entry, setIdx, el)}
+                  {...blockProps(idx)} />
+              </div>
+            })}
+          </div>
+        ) : (
+          <ExerciseBlock entryIdx={cur} onPairPrev={onPairPrev} onPairNext={onPairNext} {...blockProps(cur)} />
+        )}
+        </SwipeCards>
+      </>) : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout. Add your first exercise and off you go.')}</div>}
 
-    <div style={{ height: 12 }} />
-    {!listMode && <div className="row">
-      <Button icon="chevronLeft" disabled={unitIdx <= 0} onClick={() => navigateUnit(-1)}>{t('Prev')}</Button>
-      <Button trailingIcon="chevronRight" disabled={unitIdx < 0 || unitIdx >= units.length - 1} onClick={() => navigateUnit(1)}>{t('Next')}</Button>
-    </div>}
-    {!listMode && <div style={{ height: 10 }} />}
-    {wc.exerciseButtons && listMode && A.entries.length > 0 && <div className="muted small" style={{ marginBottom: 6 }}>{t('Move, swap and remove below act on the exercise marked {0}.', t('Current'))}</div>}
-    <Button onClick={addExercise} icon="plus">{t('Add exercise')}</Button>
-    {wc.exerciseButtons && A.entries.length > 0 && <>
-      <div style={{ height: 6 }} />
-      <div className="row">
-        <Button size="sm" icon="chevronUp" aria-label={t('Move up')}
-          disabled={!!work || !canMoveActiveWorkoutUnit(A, cur, -1)} onClick={() => moveCurrentUnit(-1)}>{t('Move up')}</Button>
-        <Button size="sm" trailingIcon="chevronDown" aria-label={t('Move down')}
-          disabled={!!work || !canMoveActiveWorkoutUnit(A, cur, 1)} onClick={() => moveCurrentUnit(1)}>{t('Move down')}</Button>
+      <div style={{ height: 12 }} />
+      {!listMode && <div className="row">
+        <Button icon="chevronLeft" disabled={unitIdx <= 0} onClick={() => navigateUnit(-1)}>{t('Prev')}</Button>
+        <Button trailingIcon="chevronRight" disabled={unitIdx < 0 || unitIdx >= units.length - 1} onClick={() => navigateUnit(1)}>{t('Next')}</Button>
+      </div>}
+      {!listMode && <div style={{ height: 10 }} />}
+      {wc.exerciseButtons && listMode && A.entries.length > 0 && <div className="muted small" style={{ marginBottom: 6 }}>{t('Move, swap and remove below act on the exercise marked {0}.', t('Current'))}</div>}
+      <Button onClick={addExercise} icon="plus">{t('Add exercise')}</Button>
+      {wc.exerciseButtons && A.entries.length > 0 && <>
+        <div style={{ height: 6 }} />
+        <div className="row">
+          <Button size="sm" icon="chevronUp" aria-label={t('Move up')}
+            disabled={!!work || !canMoveActiveWorkoutUnit(A, cur, -1)} onClick={() => moveCurrentUnit(-1)}>{t('Move up')}</Button>
+          <Button size="sm" trailingIcon="chevronDown" aria-label={t('Move down')}
+            disabled={!!work || !canMoveActiveWorkoutUnit(A, cur, 1)} onClick={() => moveCurrentUnit(1)}>{t('Move down')}</Button>
+        </div>
+        <div style={{ height: 6 }} />
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Button size="sm" icon="swap" aria-label={t('Swap exercise')} disabled={!!work}
+            onClick={() => swapExercise(cur)}>{t('Swap exercise')}</Button>
+        </div>
+        <div style={{ height: 6 }} />
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Button size="sm" icon="minus" style={{ color: 'var(--red)' }} disabled={!!work} onClick={removeExerciseSheet}>{t('Remove exercise')}</Button>
+        </div>
+      </>}
+      <div style={{ height: 10 }} />
+      {/* Wrapping up is when you know how the session went, so the note sits with the finish
+          button rather than somewhere in the header. */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+        <Button size="sm" icon="note" variant={A.note ? 'tinted' : undefined} onClick={sessionNoteSheet}>
+          {A.note ? t('Edit session note') : t('Add session note')}
+        </Button>
       </div>
-      <div style={{ height: 6 }} />
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <Button size="sm" icon="swap" aria-label={t('Swap exercise')} disabled={!!work}
-          onClick={() => swapExercise(cur)}>{t('Swap exercise')}</Button>
-      </div>
-      <div style={{ height: 6 }} />
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <Button size="sm" icon="minus" style={{ color: 'var(--red)' }} disabled={!!work} onClick={removeExerciseSheet}>{t('Remove exercise')}</Button>
-      </div>
-    </>}
-    <div style={{ height: 10 }} />
-    {/* Wrapping up is when you know how the session went, so the note sits with the finish
-        button rather than somewhere in the header. */}
-    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
-      <Button size="sm" icon="note" variant={A.note ? 'tinted' : undefined} onClick={sessionNoteSheet}>
-        {A.note ? t('Edit session note') : t('Add session note')}
-      </Button>
+      {(() => {
+        const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length
+        const allDone = A.entries.length > 0 && exDone === A.entries.length
+        return <button className={allDone ? 'btn primary' : 'btn ghost dim'} onClick={finishWorkout}>
+          {editing ? t('Save changes') : allDone ? t('Finish workout') : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
+        </button>
+      })()}
+      <div className="workout-end-spacer" />
+  </>
+  const nextUnit = units[unitIdx + 1]
+  const leftCol = <aside className="wo-left">
+    {A.entries.length > 0 && <WorkoutChips list entries={A.entries} cur={cur} onPick={pickChip} />}
+  </aside>
+  const rightCol = <aside className="wo-right">
+    <div className="wo-timer" ref={setTimerSlot} />
+    <div className="card wo-sum">
+      <div><span>{t('Sets')}</span><b>{done}/{total}</b></div>
+      <div><span>{t('Volume')}</span><b>{fmtVol(workoutVolume(A), S.unit)}</b></div>
+      {nextUnit && <div><span>{t('Up next')}</span><b>{nextUnit.map(idx => exerciseNameFor(exOr(A.entries[idx].id))).join(' + ')}</b></div>}
     </div>
-    {(() => {
-      const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length
-      const allDone = A.entries.length > 0 && exDone === A.entries.length
-      return <button className={allDone ? 'btn primary' : 'btn ghost dim'} onClick={finishWorkout}>
-        {editing ? t('Save changes') : allDone ? t('Finish workout') : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
-      </button>
-    })()}
-    <div className="workout-end-spacer" />
+  </aside>
+
+  return <WorkoutScrollAnchor enabled={collapseOn} collapsed={[...collapsed].join(',')} wide={desktop}>
+    {desktop
+      ? <div className="wo-desk">{leftCol}<div className="wo-main">{header}{mainCol}</div>{rightCol}</div>
+      : <>{header}{mainCol}</>}
   </WorkoutScrollAnchor>
 }
 

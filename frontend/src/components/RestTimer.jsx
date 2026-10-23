@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
 import { REST_MAX } from '../lib/duration.js'
@@ -80,6 +81,10 @@ export default function RestTimer() {
   const work = useUI(s => s.work)
   const { addRest, stopRest, pauseRest, resumeRest, finishWorkEarly, stopWork } = useUI()
   const on = work || timer
+  // A wide window's workout keeps a column for the bar (useUI timerSlot): it sits there as a card
+  // instead of floating over the page. Same element, same buttons, only the place differs.
+  const slot = useUI(s => s.timerSlot)
+  const place = node => (slot ? createPortal(node, slot) : node)
   const actsRef = useRef(null)
   const skipFits = useSkipFits(actsRef, [!!timer && !work, t('Skip'), t('Dismiss')])
   // The page keeps room at its bottom for the bar (index.css body.resting), so the last set and
@@ -91,7 +96,7 @@ export default function RestTimer() {
   if (!on) return null
   const pct = Math.max(0, Math.min(100, (on.left / on.total) * 100))
 
-  if (work) return (
+  if (work) return place(
     <div id="timer" className="working">
       <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
       <div className="tclock">
@@ -112,7 +117,7 @@ export default function RestTimer() {
   // its two faces (data-alt, a hidden line in index.css): the row never reflows when the rest
   // turns Ready, so a thumb on +15 never lands on −15.
   const label = timer.kind === 'switch' ? t('Switch sides') : timer.paused ? t('Paused') : t('Rest')
-  return (
+  return place(
     <div id="timer" className={'rest' + (timer.paused ? ' paused' : '') + (timer.kind === 'switch' ? ' switch' : '') + (timer.ready ? ' ready' : '')}>
       <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
       <button type="button" className="tclock" onClick={adjustRestSheet}
