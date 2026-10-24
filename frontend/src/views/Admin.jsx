@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
@@ -11,6 +11,7 @@ import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import AdminCoach from './AdminCoach.jsx'
 import { useDesktop } from '../lib/use-desktop.js'
+import { ADMIN_SECTIONS, adminSectionOf } from '../lib/admin-sections.js'
 import '../admin.css'
 
 // Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
@@ -198,7 +199,7 @@ function InvitesCard({ invites, reload, inviteOnly }) {
   const copy = code => { navigator.clipboard?.writeText(code).catch(() => {}); toast('Copied ' + code) }
   const open = (invites || []).filter(i => !i.usedBy)
   const used = (invites || []).filter(i => i.usedBy)
-  return <div className="card" id="adm-invites">
+  return <div className="card">
     <div className="row between"><h2 style={{ margin: 0 }}>Invite codes</h2>
       <Button variant="primary" size="sm" onClick={gen} icon="plus">New code</Button></div>
     <div className="adm-lead">
@@ -296,6 +297,7 @@ export default function Admin() {
   const [inviteOnly, setInviteOnly] = useState(false)
   const [tick, setTick] = useState(0)          // the ↻ button; the activity log listens to it
   const desktop = useDesktop()
+  const section = adminSectionOf(useLocation().pathname)
 
   // A failed load, or an answer without a list, used to leave the page on "Loading…" for good —
   // with a toast every 15 seconds from the poll, or with nothing at all when the answer was
@@ -319,67 +321,106 @@ export default function Admin() {
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const disabledCount = (users || []).filter(u => u.disabled).length
 
-  // A wide window (lib/use-desktop.js) spreads the same cards over two columns, users as a table
-  // first (admin.css .adm-desk); the sidebar jumps to each by its id (TabBar.jsx).
-  return <div className={desktop ? 'adm-desk' : 'narrow'}>
-    <div className="hdr" id="adm-overview">
-      <button className="iconbtn" data-back="/settings/account" onClick={() => nav('/settings/account')} aria-label="Back"><Icon name="chevronLeft" /></button>
-      <div style={{ flex: 1, marginInlineStart: 8 }}><h1 style={{ margin: 0 }}>Admin</h1>
-        <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : usersErr ? 'Could not load' : 'Loading…'}</div></div>
-      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites(); setTick(n => n + 1) }} aria-label="refresh">↻</button>
+  const refresh = () => { loadUsers(); loadInvites(); setTick(n => n + 1) }
+  const header = title => <div className="hdr">
+    <button className="iconbtn" data-back="/settings/account" onClick={() => nav('/settings/account')} aria-label="Back"><Icon name="chevronLeft" /></button>
+    <div style={{ flex: 1, marginInlineStart: 8 }}><h1 style={{ margin: 0 }}>{title}</h1>
+      <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : usersErr ? 'Could not load' : 'Loading…'}</div></div>
+    <button className="iconbtn" onClick={refresh} aria-label="refresh">↻</button>
+  </div>
+  const intro = <div className="adm-intro">
+    Everything about running this instance: who uses it, how they get in, the AI Coach, and what has happened on it. Nothing here shows anyone's training data beyond counts.
+  </div>
+  const errorCard = usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--red)' }}>
+    <div className="row between"><h2 style={{ margin: 0 }}>{users ? 'The last update failed' : 'Could not load the users'}</h2>
+      <Button size="sm" icon="reset" onClick={loadUsers}>Try again</Button></div>
+    <div className="adm-lead" style={{ marginBottom: 0 }}>
+      {usersErr} {users ? 'The list below is the last one that loaded.' : 'It tries again every 15 seconds.'}
     </div>
-    <div className="adm-intro">
-      Everything about running this instance: who uses it, how they get in, the AI Coach, and what has happened on it. Nothing here shows anyone's training data beyond counts.
+  </div>
+  const tiles = <div className="tiles" style={{ marginBottom: 12 }}>
+    <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '–'}</div></div>
+    <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '–'}</div></div>
+    <div className="tile"><div className="l">Active 7 days</div><div className="v">{users ? activeCount : '–'}</div></div>
+    <div className="tile"><div className="l">Disabled</div><div className="v">{users ? disabledCount : '–'}</div></div>
+  </div>
+  const liveCard = liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
+    <h2 className="row" style={{ margin: '0 0 2px', gap: 6 }}><Icon name="dot" style={{ fontSize: 10, color: 'var(--green)' }} />Training now</h2>
+    <div className="adm-lead">Sessions running at this moment. Tap a name for details.</div>
+    {liveUsers.map(u => <div key={u.id} className="row between" style={{ padding: '8px 2px', borderBottom: 'var(--hair) solid var(--sep)' }} onClick={() => openUser(u.id)}>
+      <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
+        <div className="dim" style={{ fontSize: '.72rem' }}>{u.live.name} · exercise {u.live.exIdx} of {u.live.exTotal} · {u.live.setsDone}/{u.live.setsTotal} sets</div></div>
+      <span className="adm-pill acc">{dur(Date.now() - u.live.startedAt)}</span>
+    </div>)}
+  </div>
+  const invitesCard = <InvitesCard invites={invites} reload={loadInvites} inviteOnly={inviteOnly} />
+  const auditCard = <AuditCard tick={tick} owner={viewerOwner} />
+  // The desktop table: every user, or on the overview the few who synced last.
+  const usersTable = list => <div className="adm-table">
+    <div className="adm-tr adm-th" aria-hidden="true"><span>User</span><span>Role</span><span>Status</span><span className="num">Workouts</span><span>Last workout</span><span>Last sync</span><span /></div>
+    {list.map(u => <button key={u.id} className="adm-tr" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
+      <span className="adm-who"><span className={'adm-av' + (u.live ? ' live' : '')} aria-hidden="true">{initials(u.name)}</span>
+        <span className="adm-who-t"><b>{u.name}</b><span>{u.live ? 'training now · ' + u.live.name : u.email || (u.hasPush ? 'push notifications on' : '')}</span></span></span>
+      <span>{u.admin ? <span className="adm-pill acc">{u.owner ? 'owner' : 'admin'}</span> : <span className="dim">member</span>}</span>
+      <span><StatusPill u={u} /></span>
+      <span className="num">{u.workouts}</span>
+      <span className="dim">{u.lastWorkout ? fmtDate(u.lastWorkout) : '–'}</span>
+      <span className="dim">{rel(u.lastSync)}</span>
+      <Icon name="chevronRight" className="chev" />
+    </button>)}
+    {users && !users.length && <div className="adm-empty">No users yet.</div>}
+  </div>
+
+  // A wide window (lib/use-desktop.js) is a real admin console: each section its own page at
+  // /admin/<section>, picked in the sidebar (TabBar.jsx). The overview has the numbers, who is
+  // training, the last people to sync and the invite codes; the other sections one card each.
+  if (desktop) {
+    const recent = [...(users || [])].sort((a, b) => (b.lastSync || 0) - (a.lastSync || 0)).slice(0, 5)
+    return <div className="adm-desk">
+      {header(ADMIN_SECTIONS.find(([id]) => id === section)[1])}
+      {errorCard}
+      {section === 'overview' && <>
+        {intro}
+        {tiles}
+        {liveCard}
+        <div className="adm-cols">
+          <div className="card">
+            <div className="row between"><h2 style={{ margin: 0 }}>Recently active</h2>
+              <Button size="sm" trailingIcon="chevronRight" onClick={() => nav('/admin/users')}>All users</Button></div>
+            <div className="adm-lead">The last people to sync. Open one for details.</div>
+            {usersTable(recent)}
+          </div>
+          {invitesCard}
+        </div>
+      </>}
+      {section === 'users' && <div className="card">
+        <div className="adm-lead" style={{ marginTop: 0 }}>Everyone with a profile on this instance. Open one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.</div>
+        {usersTable(users || [])}
+      </div>}
+      {section === 'invites' && invitesCard}
+      {section === 'coach' && <AdminCoach />}
+      {section === 'activity' && auditCard}
     </div>
+  }
 
-    {usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--red)' }}>
-      <div className="row between"><h2 style={{ margin: 0 }}>{users ? 'The last update failed' : 'Could not load the users'}</h2>
-        <Button size="sm" icon="reset" onClick={loadUsers}>Try again</Button></div>
-      <div className="adm-lead" style={{ marginBottom: 0 }}>
-        {usersErr} {users ? 'The list below is the last one that loaded.' : 'It tries again every 15 seconds.'}
-      </div>
-    </div>}
+  return <div className="narrow">
+    {header('Admin')}
+    {intro}
+    {errorCard}
+    {tiles}
 
-    <div className="tiles" style={{ marginBottom: 12 }}>
-      <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '–'}</div></div>
-      <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '–'}</div></div>
-      <div className="tile"><div className="l">Active 7 days</div><div className="v">{users ? activeCount : '–'}</div></div>
-      <div className="tile"><div className="l">Disabled</div><div className="v">{users ? disabledCount : '–'}</div></div>
-    </div>
-
-    {liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
-      <h2 className="row" style={{ margin: '0 0 2px', gap: 6 }}><Icon name="dot" style={{ fontSize: 10, color: 'var(--green)' }} />Training now</h2>
-      <div className="adm-lead">Sessions running at this moment. Tap a name for details.</div>
-      {liveUsers.map(u => <div key={u.id} className="row between" style={{ padding: '8px 2px', borderBottom: 'var(--hair) solid var(--sep)' }} onClick={() => openUser(u.id)}>
-        <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
-          <div className="dim" style={{ fontSize: '.72rem' }}>{u.live.name} · exercise {u.live.exIdx} of {u.live.exTotal} · {u.live.setsDone}/{u.live.setsTotal} sets</div></div>
-        <span className="adm-pill acc">{dur(Date.now() - u.live.startedAt)}</span>
-      </div>)}
-    </div>}
+    {liveCard}
 
     {/* The Coach setup. Renders nothing at all unless the instance offers the Coach, so an admin
         page on a box that never enabled it is byte-for-byte the page it was before. */}
-    <div id="adm-coach" className="adm-coach"><AdminCoach /></div>
+    <AdminCoach />
 
-    <InvitesCard invites={invites} reload={loadInvites} inviteOnly={inviteOnly} />
+    {invitesCard}
 
-    <div className="card" id="adm-users">
+    <div className="card">
       <h2 style={{ margin: 0 }}>Users</h2>
       <div className="adm-lead">Everyone with a profile on this instance. Tap one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.</div>
-      {desktop ? <div className="adm-table">
-        <div className="adm-tr adm-th" aria-hidden="true"><span>User</span><span>Role</span><span>Status</span><span className="num">Workouts</span><span>Last workout</span><span>Last sync</span><span /></div>
-        {(users || []).map(u => <button key={u.id} className="adm-tr" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
-          <span className="adm-who"><span className={'adm-av' + (u.live ? ' live' : '')} aria-hidden="true">{initials(u.name)}</span>
-            <span className="adm-who-t"><b>{u.name}</b><span>{u.live ? 'training now · ' + u.live.name : u.email || (u.hasPush ? 'push notifications on' : '')}</span></span></span>
-          <span>{u.admin ? <span className="adm-pill acc">{u.owner ? 'owner' : 'admin'}</span> : <span className="dim">member</span>}</span>
-          <span><StatusPill u={u} /></span>
-          <span className="num">{u.workouts}</span>
-          <span className="dim">{u.lastWorkout ? fmtDate(u.lastWorkout) : '–'}</span>
-          <span className="dim">{rel(u.lastSync)}</span>
-          <Icon name="chevronRight" className="chev" />
-        </button>)}
-        {users && !users.length && <div className="adm-empty">No users yet.</div>}
-      </div> : <div className="list">
+      <div className="list">
         {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
           <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{u.owner ? 'owner' : 'admin'}</span>}{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>disabled</span>}</div>
             <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · last sync ' + rel(u.lastSync)}</div>
@@ -387,9 +428,9 @@ export default function Admin() {
           {u.hasPush && <Icon name="bell" title="push notifications on" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
         </div>)}
         {users && !users.length && <div className="adm-empty">No users yet.</div>}
-      </div>}
+      </div>
     </div>
 
-    <div style={{ marginTop: 14 }} id="adm-activity" className="adm-activity"><AuditCard tick={tick} owner={viewerOwner} /></div>
+    <div style={{ marginTop: 14 }}>{auditCard}</div>
   </div>
 }
