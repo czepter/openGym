@@ -2356,6 +2356,9 @@ export default {
   // --- import with no account: workouts on this device ---
   'This device has 1 workout that is not in this backup. Replacing deletes it.': 'Este dispositivo tem 1 treino que não está nesta cópia. Substituir elimina-o.',
   'This device has {0} workouts that are not in this backup. Replacing deletes them.': 'Este dispositivo tem {0} treinos que não estão nesta cópia. Substituir elimina-os.',
+  // --- desktop Home: the streak card ---
+  'Next session': 'Próxima sessão',
+  'Calendar': 'Calendário',
   // --- PDF exports and the performance report ---
   'Page {0} of {1}': 'Página {0} de {1}',
   'Training plan': 'Plano de treino',

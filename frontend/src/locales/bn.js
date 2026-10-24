@@ -2435,6 +2435,9 @@ export default {
   // --- import with no account: workouts on this device ---
   'This device has 1 workout that is not in this backup. Replacing deletes it.': 'এই ডিভাইসে ১টি ওয়ার্কআউট আছে যা এই ব্যাকআপে নেই। প্রতিস্থাপন করলে এটি মুছে যাবে।',
   'This device has {0} workouts that are not in this backup. Replacing deletes them.': 'এই ডিভাইসে {0}টি ওয়ার্কআউট আছে যা এই ব্যাকআপে নেই। প্রতিস্থাপন করলে এগুলো মুছে যাবে।',
+  // --- desktop Home: the streak card ---
+  'Next session': 'পরের সেশন',
+  'Calendar': 'ক্যালেন্ডার',
   // --- PDF exports and the performance report ---
   'Page {0} of {1}': 'পৃষ্ঠা {0} / {1}',
   'Training plan': 'ট্রেনিং প্ল্যান',

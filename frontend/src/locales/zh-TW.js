@@ -2349,6 +2349,9 @@ export default {
   // --- import with no account: workouts on this device ---
   'This device has 1 workout that is not in this backup. Replacing deletes it.': '此裝置上有 1 筆訓練紀錄不在此備份中。覆蓋將會刪除它。',
   'This device has {0} workouts that are not in this backup. Replacing deletes them.': '此裝置上有 {0} 筆訓練紀錄不在此備份中。覆蓋將會將其全數刪除。',
+  // --- desktop Home: the streak card ---
+  'Next session': '下次訓練',
+  'Calendar': '行事曆',
   // --- PDF exports and the performance report ---
   'Page {0} of {1}': '第 {0} 頁，共 {1} 頁',
   'Training plan': '訓練計畫',

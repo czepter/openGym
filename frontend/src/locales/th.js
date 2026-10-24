@@ -2367,6 +2367,9 @@ export default {
   // --- import with no account: workouts on this device ---
   'This device has 1 workout that is not in this backup. Replacing deletes it.': 'อุปกรณ์นี้มีการออกกำลังกาย 1 รายการที่ไม่อยู่ในข้อมูลสำรองนี้ การแทนที่จะลบรายการนั้น',
   'This device has {0} workouts that are not in this backup. Replacing deletes them.': 'อุปกรณ์นี้มีการออกกำลังกาย {0} รายการที่ไม่อยู่ในข้อมูลสำรองนี้ การแทนที่จะลบรายการเหล่านั้น',
+  // --- desktop Home: the streak card ---
+  'Next session': 'เซสชันถัดไป',
+  'Calendar': 'ปฏิทิน',
   // --- PDF exports and the performance report ---
   'Page {0} of {1}': 'หน้า {0} จาก {1}',
   'Training plan': 'แผนการฝึก',
