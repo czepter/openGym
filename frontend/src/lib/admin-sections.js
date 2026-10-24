@@ -2,11 +2,11 @@
 // sidebar (TabBar.jsx); a phone shows them all on one page (views/Admin.jsx). The dashboard is
 // English-only, so are these labels.
 export const ADMIN_SECTIONS = [
-  ['overview', 'Overview'],
-  ['users', 'Users'],
-  ['invites', 'Invite codes'],
-  ['coach', 'Coach'],
-  ['activity', 'Activity log'],
+  ['overview', 'Overview', 'grid'],
+  ['users', 'Users', 'person'],
+  ['invites', 'Invite codes', 'envelope'],
+  ['coach', 'Coach', 'sparkles'],
+  ['activity', 'Activity log', 'history'],
 ]
 
 /** The section a path names, `overview` for /admin itself or anything unknown. */
