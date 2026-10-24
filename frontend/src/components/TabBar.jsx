@@ -9,10 +9,7 @@ import { useConnectionTrouble } from './SyncBanner.jsx'
 import { coachAvailable } from '../lib/coach.js'
 import { DEMO } from '../lib/demo.js'
 import { MOBILE } from '../lib/mobile.js'
-
-// The Admin page's cards, reachable from the sidebar while it is open (views/Admin.jsx ids).
-// The dashboard is English-only, so are these.
-const ADMIN_SECTIONS = [['adm-overview', 'Overview'], ['adm-users', 'Users'], ['adm-invites', 'Invite codes'], ['adm-coach', 'Coach'], ['adm-activity', 'Activity log']]
+import { ADMIN_SECTIONS, adminSectionOf } from '../lib/admin-sections.js'
 
 // Module scope, not TabBar's render body. Declared inside it, `Tab` was a new function on every
 // render, so React saw a different component type each time and threw the button away and built a
@@ -51,6 +48,21 @@ export default function TabBar({ onStart, desktop = false }) {
     nav('/workout')
   }
 
+  // Admin on a wide window is a console of its own: the sidebar holds its sections and a way back
+  // to the app, none of the app's tabs.
+  if (desktop && cur === 'admin') {
+    const section = adminSectionOf(loc.pathname)
+    return (
+      <nav id="tabbar" aria-label="Admin">
+        <div className="side-brand"><span className="side-logo"><Icon name="shield" /></span>Admin</div>
+        {ADMIN_SECTIONS.map(([id, label, icon]) =>
+          <Tab key={id} active={section === id} icon={icon} label={label} onClick={() => nav(id === 'overview' ? '/admin' : '/admin/' + id)} />)}
+        <div className="side-gap" />
+        <Tab icon="chevronLeft" label="Back to the app" onClick={() => nav('/home')} />
+      </nav>
+    )
+  }
+
   return (
     <nav id="tabbar">
       <Tab active={on('home')} icon="house" label={t('Home')} dot={trouble && !desktop} onClick={() => nav('/home')} />
@@ -79,8 +91,6 @@ export default function TabBar({ onStart, desktop = false }) {
         <div className="side-gap" />
         {S.checkIn !== false && <Tab active={cur === 'checkin'} icon="qr" label={t('Check in')} onClick={() => nav('/checkin')} />}
         {user?.admin && <Tab active={cur === 'admin'} icon="shield" label="Admin" onClick={() => nav('/admin')} />}
-        {cur === 'admin' && ADMIN_SECTIONS.map(([id, label]) =>
-          <button key={id} className="side-sub" onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{label}</button>)}
         <Tab active={cur === 'settings'} icon="gear" label={t('Settings')} dot={trouble} onClick={() => nav('/settings')} />
       </>}
     </nav>

@@ -2414,4 +2414,7 @@ export default {
   // --- import with no account: workouts on this device ---
   'This device has 1 workout that is not in this backup. Replacing deletes it.': '此设备上有 1 次训练不在此备份中。替换会删除它。',
   'This device has {0} workouts that are not in this backup. Replacing deletes them.': '此设备上有 {0} 次训练不在此备份中。替换会删除它们。',
+  // --- desktop Home: the streak card ---
+  'Next session': '下次训练',
+  'Calendar': '日历',
 }
