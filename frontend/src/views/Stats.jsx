@@ -109,14 +109,14 @@ function StrengthLegend() {
   </div>
 }
 
-function fatigueLabel(value) {
+export function fatigueLabel(value) {
   const state = fatigueStateOf(value)
   return t(state === 'ready' ? 'Ready' : state === 'recovering' ? 'Recovering' : 'Fatigued')
 }
 
 // The user's own last registered bodyweight, in kg: the body-mass part of a bodyweight
 // exercise's load for fatigue and for estimated effort, so both read the same set the same way.
-function profileBodyweightKg(S) {
+export function profileBodyweightKg(S) {
   const entries = S.bodyweight || []
   if (!entries.length) return null
   const last = entries.slice().sort((a, b) => String(a.d).localeCompare(String(b.d))).at(-1)
