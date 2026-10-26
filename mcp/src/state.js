@@ -9,6 +9,8 @@ import path from 'node:path'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 const DATA_DIR = process.env.OPENGYM_DATA || path.join(process.cwd(), 'data')
+// Whether a data directory was asked for, as opposed to the ./data guess.
+const DATA_SET = !!process.env.OPENGYM_DATA
 
 let _db = undefined
 let _dbMtime = 0
@@ -17,6 +19,7 @@ let _watcher = null
 // uid -> { state, mtime }. state null = no state file (brand-new account).
 const cache = new Map()
 const scope = new AsyncLocalStorage()
+let _seeded = false     // a test's in-memory state, never compared with the disk
 
 // Runs fn with getState()/getUser() answering for uid, across everything fn awaits.
 export const asUser = (uid, fn) => scope.run(uid, fn)
@@ -135,15 +138,19 @@ export function getState() {
   // Re-read if the file's mtime changed since our last load — covers watcher omissions and
   // platforms with no fs.watch.
   let mtime
-  try { mtime = fs.statSync(file).mtimeMs } catch {
-    return hit ? hit.state : null
+  try { mtime = fs.statSync(file).mtimeMs } catch (e) {
+    if (_seeded) return hit ? hit.state : null
+    // Gone (the account was deleted, say): without a watcher the cached profile used to be
+    // served on and on. Anything else gets the read below, which reports it as the fault it is.
+    if (e.code === 'ENOENT') { cache.delete(uid); return null }
+    mtime = NaN
   }
   if (!hit || mtime !== hit.mtime) {
     const fresh = readJsonOrNull(file)
     // Same shape the frontend builds on pullState — defaults merged with stored state so any
     // field the app added since the snapshot was last saved shows up undefined-safe. null: no
-    // state file at all — never signed in on a device.
-    cache.set(uid, { state: fresh ? Object.assign({}, defaultsShape(), fresh) : (hit ? hit.state : null), mtime })
+    // state file at all (never signed in on a device), or it went between stat and read.
+    cache.set(uid, fresh ? { state: Object.assign({}, defaultsShape(), fresh), mtime } : { state: null, mtime: 0 })
   }
   return cache.get(uid).state
 }
@@ -157,11 +164,32 @@ export function getUser() {
 
 export const dataDir = () => DATA_DIR
 
+// The profile this server is set up for, which log_workout holds a token against: OPENGYM_UID
+// when it is given, whether or not its data is readable here, else the one the data directory
+// names. null only when nothing names one: no OPENGYM_UID, no OPENGYM_DATA and no ./data, the
+// remote-server setup. A data directory that was asked for and cannot be read, or that holds
+// several profiles, throws: a broken mount is no licence to write to whichever profile the token is.
+export function localUid() {
+  if (_uid !== null) return _uid
+  const envUid = (process.env.OPENGYM_UID || '').trim()
+  if (envUid) return envUid
+  if (!DATA_SET && !fs.existsSync(DATA_DIR)) return null
+  init()
+  return _uid
+}
+
+// Drop the cached state, so the next read sees a write log_workout just made without waiting for
+// the watcher. Only meaningful when this data directory is the one the server writes.
+export function invalidate() {
+  cache.clear()
+}
+
 // Test-only: work against a passed-in state, not the disk.
 export function _seedStateForTests(state) {
   _uid = 'test-uid'
   _db = { users: [{ id: _uid, name: 'Test', created: '2026-07-26T00:00:00.000Z' }], creds: [], subs: [], invites: [] }
   cache.set(_uid, { state, mtime: Number.MAX_SAFE_INTEGER })   // never re-read from disk in a test
+  _seeded = true
   if (_watcher) { _watcher.close(); _watcher = null }
 }
 
