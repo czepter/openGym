@@ -2162,7 +2162,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
   body.has-side #tabbar button.start.rec:hover{background:var(--orange);color:#000}
   body.has-side #tabbar button.start.rec .cir{background:none;box-shadow:none;color:inherit}
   body.has-side #tabbar button.start.rec .cir::after{display:none}
-  body.has-side #tabbar button.start.on{box-shadow:inset 0 0 0 2px color-mix(in srgb,#000 22%,transparent)}
+  body.has-side #tabbar button.start.on{box-shadow:inset 0 0 0 2px rgba(0,0,0,.22);box-shadow:inset 0 0 0 2px color-mix(in srgb,#000 22%,transparent)}
 
   .side-brand{order:-2;display:flex;align-items:center;gap:10px;padding:2px 8px 8px;font-size:17px;font-weight:700;letter-spacing:-.02em}
   .side-logo{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--acc);color:var(--on-acc);font-size:19px;--icon-stroke:2}
@@ -2212,6 +2212,10 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
   .dk-rec.ready .tag{color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
   .dk-rec.recovering .tag{color:var(--orange);background:color-mix(in srgb,var(--orange) 16%,transparent)}
   .dk-rec.fatigued .tag{color:var(--red);background:color-mix(in srgb,var(--red) 16%,transparent)}
+  /* Safari before 16.2 (no color-mix): the tag keeps a neutral ground, its word keeps the colour */
+  @supports not (color: color-mix(in srgb, red 50%, blue)){
+    .dk-rec.ready .tag,.dk-rec.recovering .tag,.dk-rec.fatigued .tag{background:var(--surface-2)}
+  }
   .dk-kpis{display:flex;flex-wrap:wrap;gap:32px;margin:4px 0 14px}
   .dk-kpis>div{display:flex;flex-direction:column}
   .dk-kpis b{font-size:24px;font-weight:700;letter-spacing:-.02em}
