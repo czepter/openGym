@@ -28,7 +28,7 @@ vi.mock('../store/useUI.js', () => {
   useUI.getState = snap
   return { useUI }
 })
-vi.mock('react-router-dom', () => ({ useNavigate: () => () => {}, useLocation: () => ({ pathname: '/admin' }) }))
+vi.mock('react-router-dom', () => ({ useNavigate: () => () => {}, useLocation: () => ({ pathname: '/admin', state: null }) }))
 vi.mock('../sheets.jsx', () => ({ confirmSheet: vi.fn() }))
 vi.mock('./AdminCoach.jsx', () => ({ default: () => null }))
 
