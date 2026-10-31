@@ -82,7 +82,7 @@ function jefitRows(text) {
   const sections = {}
   let cur = null
   for (const line of String(text).replace(/^﻿/, '').split(/\r?\n/)) {
-    const m = line.match(/^#{3} *(.+?) *#{3}\s*$/)
+    const m = line.match(/^#{3} *([^#\s].*?) *#{3,}\s*$/)
     if (m) cur = sections[m[1].toUpperCase()] = []
     else if (cur) cur.push(line)
   }

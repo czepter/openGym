@@ -69,3 +69,21 @@ describe('a Jefit export', () => {
     expect(parseImport(JEFIT, { unit: 'kg' }).kind).toBe('workouts')
   })
 })
+
+// The real export closes each table with a line of # and opens the next with "### NAME ####…":
+// the name must not swallow the trailing hashes, or no table is found and the file reads as empty.
+describe('a Jefit export with its real section lines', () => {
+  const bar = '#'.repeat(36)
+  const text = [
+    `### SETTING ${bar}`, 'row_id,gender', '1,F', bar, '',
+    `### WORKOUT SESSIONS ${bar}`, '', '_id,starttime,total_time', `10,${start('2026-03-02', 18, 0)},4200`, bar, '',
+    `### EXERCISE LOGS ${bar}`, '', '_id,mydate,ename,logs,belongsession', '100,2026-03-02,Barbell Bench Press,"60x8,62.5x6",10', bar,
+  ].join('\n')
+
+  it('finds the tables', () => {
+    const parsed = parseImport(text, { unit: 'kg' })
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.source).toBe('Jefit')
+    expect(parsed.sets).toBe(2)
+  })
+})
