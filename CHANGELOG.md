@@ -4,7 +4,7 @@ Newest first. Each release is a `## vX.Y.Z (YYYY-MM-DD)` section, and the releas
 GitHub and GitLab are that section, word for word. New work goes under `## Unreleased` until the
 tag. Write it for the people using the app: what changed for them, short, no em dashes.
 
-## Unreleased
+## v1.4.4 (2026-11-01)
 
 - **Your AI assistant, on your own server.** Turn on the new `mcp` container
   (`COMPOSE_PROFILES=mcp` in `.env`) and Claude, Cursor or another MCP client reads your routines,
@@ -15,6 +15,8 @@ tag. Write it for the people using the app: what changed for them, short, no em 
   own data; it can never change anything. "Sign out everywhere" disconnects it again. Setup is
   in [mcp/README.md](mcp/README.md).
 - A new image, `opengym-mcp`, is published next to `opengym-api` and `opengym-web`.
+- **Jefit imports work again.** Jefit's export was rejected as empty because of the long rows of
+  `#` around its sections. It now reads, and your sets and sessions come across.
 
 ## v1.4.3 (2026-10-26)
 
