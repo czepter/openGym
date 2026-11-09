@@ -132,6 +132,7 @@ const TAGS = {
   auth: { title: 'Auth', side: 'Passkeys &amp; sessions' },
   pairing: { title: 'Pairing', side: 'Connect the mobile app' },
   oauth: { title: 'OAuth', side: 'Sign AI clients in to the MCP endpoint' },
+  watch: { title: 'Watch relay', side: 'Zepp OS watches' },
   password: { title: 'Password', side: 'Optional name &amp; password (PASSWORD_LOGIN)' },
   passkeys: { title: 'Passkeys', side: 'More passkeys &amp; device links' },
   data: { title: 'Data', side: 'State sync' },
@@ -141,6 +142,7 @@ const TAGS = {
   // A tag missing from this map renders nowhere at all, silently, so every tag in the
   // spec needs a line here.
   coach: { title: 'AI Coach', side: 'Plans, reviews, debriefs' },
+  integrations: { title: 'Integrations', side: 'Webhooks (INTEGRATIONS)' },
   admin: { title: 'Admin', side: 'Users, invites, audit log, Coach' }
 }
 

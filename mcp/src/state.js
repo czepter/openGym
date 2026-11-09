@@ -6,6 +6,7 @@
    reads getState()/getUser() the same way in both. */
 import fs from 'node:fs'
 import path from 'node:path'
+import { applyExerciseMerges } from '../../frontend/src/lib/exercise-merge.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 const DATA_DIR = process.env.OPENGYM_DATA || path.join(process.cwd(), 'data')
@@ -150,7 +151,7 @@ export function getState() {
     // Same shape the frontend builds on pullState — defaults merged with stored state so any
     // field the app added since the snapshot was last saved shows up undefined-safe. null: no
     // state file at all (never signed in on a device), or it went between stat and read.
-    cache.set(uid, fresh ? { state: Object.assign({}, defaultsShape(), fresh), mtime } : { state: null, mtime: 0 })
+    cache.set(uid, fresh ? { state: shaped(fresh), mtime } : { state: null, mtime: 0 })
   }
   return cache.get(uid).state
 }
@@ -191,6 +192,15 @@ export function _seedStateForTests(state) {
   cache.set(_uid, { state, mtime: Number.MAX_SAFE_INTEGER })   // never re-read from disk in a test
   _seeded = true
   if (_watcher) { _watcher.close(); _watcher = null }
+}
+
+// A stored profile as the tools read it: the app's defaults under it, and an exercise merged into
+// another in the app (#656, lib/exercise-merge.js) read as the one it went into wherever a copy
+// still names it, the way the app's own copies are brought in line when they meet.
+function shaped(stored) {
+  const st = Object.assign({}, defaultsShape(), stored)
+  try { applyExerciseMerges(st) } catch { /* the copy as stored, then */ }
+  return st
 }
 
 function defaultsShape() {
